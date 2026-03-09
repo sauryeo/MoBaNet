@@ -44,7 +44,7 @@ RGB_MEAN = np.array([0.485, 0.456, 0.406], dtype='float32').reshape(3, 1, 1)
 RGB_STD = np.array([0.229, 0.224, 0.225], dtype='float32').reshape(3, 1, 1)
 
 # Used for logging/checkpoint naming only.
-MODEL_NAME = 'MMNet'
+MODEL_NAME = 'Net'
 MODE = None
 
 # DATASET = 'Vaihingen'

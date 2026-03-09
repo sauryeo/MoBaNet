@@ -19,7 +19,7 @@ from utils import _potsdam_dsm_id
 import Model.cfg as cfg
 from torch.autograd import Variable
 from IPython.display import clear_output
-from MMNet import MMNet as MFNet
+from Net import Net as MFNet
 try:
     from urllib.request import URLopener
 except ImportError:

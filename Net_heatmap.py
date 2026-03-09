@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import cv2
+import torch.autograd as autograd
+import os
 from Model.models.sam import sam_model_registry
 from Model.models.dinov2 import dinov2_model_registry
 import Model.cfg as cfg
@@ -77,6 +79,7 @@ class SEFusion(nn.Module):
         out = rgb + dsm
         return out
 
+  
 class AuxHead(nn.Module):
 
     def __init__(self, in_channels=64, num_classes=8):
@@ -91,6 +94,7 @@ class AuxHead(nn.Module):
         feat = self.conv_out(feat)
         feat = F.interpolate(feat, size=(h, w), mode='bilinear', align_corners=False)
         return feat
+
 
 class PPM(nn.Module):
     def __init__(self, in_channels, out_channels, pool_sizes=(1, 2, 3, 6)):
@@ -195,16 +199,17 @@ def draw_features(feature, savename=''):
     savedir = savename
     visualize = cv2.applyColorMap(visualize, cv2.COLORMAP_JET)
     cv2.imwrite(savedir, visualize)
-
-class MMNet(nn.Module):
+    
+class Net(nn.Module):
     def __init__(self,
                  decode_channels=64,
                  dropout=0.1,
                  window_size=8,
-                 num_classes=6
+                 num_classes=6,
+                 runtime_args=None,
                  ):
         super().__init__()
-        args = cfg.parse_args()
+        args = runtime_args if runtime_args is not None else cfg.parse_args()
         encoder_name = getattr(args, "encoder", "dinov2_vitl14")
         if encoder_name in dinov2_model_registry or encoder_name.startswith("dinov2"):
             build_fn = dinov2_model_registry.get(encoder_name, dinov2_model_registry["dinov2_vitl14"])
@@ -232,8 +237,6 @@ class MMNet(nn.Module):
             is_dinov2 = False
         self.is_dinov2 = is_dinov2
         encoder_channels = (256, 256, 256, 256)
-        self.cpia_enabled = getattr(self.image_encoder, "cpia_enabled", True)
-        self.bagf_enabled = getattr(self.image_encoder, "bagf_enabled", True)
         if not self.is_dinov2:
             self.fpn1x = nn.Sequential(
                 nn.ConvTranspose2d(256, 256, kernel_size=2, stride=2),
@@ -265,15 +268,12 @@ class MMNet(nn.Module):
             self.fusion4 = SEFusion(encoder_channels[3])
         for n, value in self.image_encoder.named_parameters():
             if is_dinov2:
-                trainable = False
-                if "dual_proj_layers" in n:
-                    trainable = True
-                elif "peft_cpia_blocks" in n:
-                    trainable = self.cpia_enabled
-                elif "peft_bagf_blocks" in n or "peft_fuse_norms" in n:
-                    trainable = self.bagf_enabled
-                elif n.startswith("extra_patch_embed.") or ".extra_patch_embed." in n:
-                    trainable = getattr(self.image_encoder, "use_extra_patch_embed", False)
+                trainable = (
+                    ("peft_" in n)
+                    or ("dual_" in n)
+                    or n.startswith("extra_patch_embed.")
+                    or (".extra_patch_embed." in n)
+                )
                 value.requires_grad = trainable
                 continue
             if n.startswith("patch_embed."):
@@ -325,31 +325,103 @@ class MMNet(nn.Module):
                 aspect_ratio=self.mcrc_block_aspect,
             )
         y = torch.unsqueeze(y, dim=1).repeat(1,3,1,1)
+        fallback_heatmap_feature = None
         if self.is_dinov2:
             fused_feats, rgb_feats, dsm_feats = self.image_encoder(x, y)
+            res1x = rgb_feats[-1]
+            res1y = dsm_feats[-1]
+            heatmaps = [res1x, res1y]
+            fallback_heatmap_feature = fused_feats[0]
             x = self.decoder(fused_feats, h, w)
-            if mode == 'Train' and self.mcrc_enabled:
-                x_rgb = self.aux_head_rgb(rgb_feats[0], h, w)
-                x_dsm = self.aux_head_dsm(dsm_feats[0], h, w)
-                return x, x_rgb, x_dsm
-            return x
+        else:
+            deepx, deepy = self.image_encoder(x, y) # 256*16*16
+            heatmaps = [deepx, deepy]
+            res1x = self.fpn1x(deepx)
+            res2x = self.fpn2x(deepx)
+            res3x = self.fpn3x(deepx)
+            res4x = self.fpn4x(deepx)
+            res1y = self.fpn1y(deepy)
+            res2y = self.fpn2y(deepy)
+            res3y = self.fpn3y(deepy)
+            res4y = self.fpn4y(deepy)
+            res1 = self.fusion1(res1x, res1y)
+            res2 = self.fusion2(res2x, res2y)
+            res3 = self.fusion3(res3x, res3y)
+            res4 = self.fusion4(res4x, res4y)
+            x = self.decoder([res1, res2, res3, res4], h, w)
 
-        deepx, deepy = self.image_encoder(x, y) # 256*16*16
-        res1x = self.fpn1x(deepx)
-        res2x = self.fpn2x(deepx)
-        res3x = self.fpn3x(deepx)
-        res4x = self.fpn4x(deepx)
-        res1y = self.fpn1y(deepy)
-        res2y = self.fpn2y(deepy)
-        res3y = self.fpn3y(deepy)
-        res4y = self.fpn4y(deepy)
-        res1 = self.fusion1(res1x, res1y)
-        res2 = self.fusion2(res2x, res2y)
-        res3 = self.fusion3(res3x, res3y)
-        res4 = self.fusion4(res4x, res4y)
-        x = self.decoder([res1, res2, res3, res4], h, w)
+        target_class = int(os.getenv("HEATMAP_TARGET_CLASS", "1"))
+        target_y = int(os.getenv("HEATMAP_TARGET_Y", "100"))
+        target_x = int(os.getenv("HEATMAP_TARGET_X", "65"))
+        target_class = max(0, min(target_class, x.shape[1] - 1))
+        target_y = max(0, min(target_y, x.shape[2] - 1))
+        target_x = max(0, min(target_x, x.shape[3] - 1))
+        pred = x[:, target_class, target_y, target_x]
+
+        def build_heatmap_safe(feature, fallback_feature=None):
+            grad_source = feature
+            feature_grad = autograd.grad(pred, grad_source, allow_unused=True, retain_graph=True)[0]
+            if feature_grad is None and fallback_feature is not None and fallback_feature is not grad_source:
+                grad_source = fallback_feature
+                feature_grad = autograd.grad(pred, grad_source, allow_unused=True, retain_graph=True)[0]
+
+            feature_map = grad_source[0].clone()
+            if feature_grad is not None:
+                pooled_grads = F.adaptive_avg_pool2d(feature_grad, (1, 1))[0]
+                for i in range(feature_map.shape[0]):
+                    feature_map[i, ...] *= pooled_grads[i, ...]
+
+            heatmap = feature_map.detach().cpu().numpy()
+            heatmap = np.mean(heatmap, axis=0)
+            heatmap = np.maximum(heatmap, 0)
+            heatmap_max = np.max(heatmap)
+            if heatmap_max > 0:
+                heatmap /= heatmap_max
+            return heatmap
+
+        heatmap1 = build_heatmap_safe(heatmaps[0], fallback_heatmap_feature)
+        heatmap2 = build_heatmap_safe(heatmaps[1], fallback_heatmap_feature)
         if mode == 'Train' and self.mcrc_enabled:
             x_rgb = self.aux_head_rgb(res1x, h, w)
             x_dsm = self.aux_head_dsm(res1y, h, w)
-            return x, x_rgb, x_dsm
-        return x 
+            return x, x_rgb, x_dsm, heatmap1, heatmap2
+        return x, heatmap1, heatmap2
+        ## heatmap
+        feature = heatmaps[0]
+        feature_grad = autograd.grad(pred, feature, allow_unused=True, retain_graph=True)[0]
+        grads = feature_grad  # 获取梯度
+        pooled_grads = torch.nn.functional.adaptive_avg_pool2d(grads, (1, 1))
+        # 此处batch size默认为1，所以去掉了第0维（batch size维）
+        pooled_grads = pooled_grads[0]
+        feature = feature[0]
+        # print("pooled_grads:", pooled_grads.shape)
+        # print("feature:", feature.shape)
+        # feature.shape[0]是指定层feature的通道数
+        for i in range(feature.shape[0]):
+            feature[i, ...] *= pooled_grads[i, ...]
+        heatmap = feature.detach().cpu().numpy()
+        heatmap = np.mean(heatmap, axis=0)
+        heatmap1 = np.maximum(heatmap, 0)
+        heatmap1 /= np.max(heatmap1)
+        
+        feature = heatmaps[1]
+        feature_grad = autograd.grad(pred, feature, allow_unused=True, retain_graph=True)[0]
+        grads = feature_grad  # 获取梯度
+        pooled_grads = torch.nn.functional.adaptive_avg_pool2d(grads, (1, 1))
+        # 此处batch size默认为1，所以去掉了第0维（batch size维）
+        pooled_grads = pooled_grads[0]
+        feature = feature[0]
+        # print("pooled_grads:", pooled_grads.shape)
+        # print("feature:", feature.shape)
+        # feature.shape[0]是指定层feature的通道数
+        for i in range(feature.shape[0]):
+            feature[i, ...] *= pooled_grads[i, ...]
+        heatmap = feature.detach().cpu().numpy()
+        heatmap = np.mean(heatmap, axis=0)
+        heatmap2 = np.maximum(heatmap, 0)
+        heatmap2 /= np.max(heatmap2)
+        if mode == 'Train' and self.mcrc_enabled:
+            x_rgb = self.aux_head_rgb(res1x, h, w)
+            x_dsm = self.aux_head_dsm(res1y, h, w)
+            return x, x_rgb, x_dsm, heatmap1, heatmap2
+        return x, heatmap1, heatmap2

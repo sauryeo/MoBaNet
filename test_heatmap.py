@@ -8,7 +8,7 @@ import torch
 from tqdm import tqdm
 
 import Model.cfg as cfg
-from MMNet_heatmap import MMNet
+from Net_heatmap import Net
 from utils import *
 from utils import _potsdam_dsm_id
 
@@ -28,8 +28,8 @@ TARGET_Y = 100
 TARGET_CLASS = 1
 OUTPUT_DIR = os.path.join("heatmap_compare", DATASET.lower())
 OUTPUT_DPI = 300
-BASE_WEIGHTS_PATH = "/data1/lihaocheng/deeplearning/paper1/MoBaSF-dinov2-ablation/resultsp/MMNet_ablation_base_epoch25_0.8494706829369975"
-FULL_WEIGHTS_PATH = "/data1/lihaocheng/deeplearning/paper1/MoBaSF-dinov2/resultsp/MMNet_epoch50_0.8748094843563392"
+BASE_WEIGHTS_PATH = "/data1/lihaocheng/deeplearning/paper1/MoBaSF-dinov2-ablation/resultsp/Net_ablation_base_epoch25_0.8494706829369975"
+FULL_WEIGHTS_PATH = "/data1/lihaocheng/deeplearning/paper1/MoBaSF-dinov2/resultsp/Net_epoch50_0.8748094843563392"
 MAX_EXPORTS = None
 SHOW_TARGET_MARKER = False
 HEATMAP_STRIDE = 256
@@ -147,7 +147,7 @@ def adapt_state_dict_for_window(state_dict, model_state_dict, label):
 def load_model(weights_path, label, runtime_args):
     if not weights_path or str(weights_path) == "0":
         raise ValueError(f"{label} checkpoint is required. Please set {label.upper()}_WEIGHTS_PATH in test_heatmap.py.")
-    net = MMNet(num_classes=N_CLASSES, runtime_args=runtime_args).cuda()
+    net = Net(num_classes=N_CLASSES, runtime_args=runtime_args).cuda()
     state_dict = torch.load(weights_path, map_location="cpu")
     model_state_dict = net.state_dict()
     state_dict = adapt_state_dict_for_window(state_dict, model_state_dict, label)
