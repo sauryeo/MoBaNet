@@ -36,10 +36,10 @@ HEATMAP_STRIDE = 256
 HEATMAP_WINDOW_SIZE = (512, 512)
 DISPLAY_SIZE = 512
 BASE_USE_CPIA = False
-BASE_USE_BAGF = False
+BASE_USE_dgfm = False
 BASE_USE_MCRC = False
 FULL_USE_CPIA = True
-FULL_USE_BAGF = True
+FULL_USE_dgfm = True
 FULL_USE_MCRC = True
 
 os.environ["HEATMAP_TARGET_X"] = str(TARGET_X)
@@ -89,10 +89,10 @@ def heatmap_to_rgb(heatmap, output_size=(DISPLAY_SIZE, DISPLAY_SIZE)):
     return heatmap[:, :, (2, 1, 0)]
 
 
-def build_runtime_args(use_cpia, use_bagf, mcrc, window_size):
+def build_runtime_args(use_cpia, use_dgfm, mcrc, window_size):
     args = copy.deepcopy(cfg.parse_args())
     args.use_cpia = use_cpia
-    args.use_bagf = use_bagf
+    args.use_dgfm = use_dgfm
     args.mcrc = mcrc
     padded_h, padded_w = get_padded_window_size(window_size)
     if padded_h != padded_w:
@@ -156,7 +156,7 @@ def load_model(weights_path, label, runtime_args):
     unexpected = getattr(incompatible, "unexpected_keys", [])
     print(
         f"[{label}] checkpoint={weights_path}\n"
-        f"[{label}] use_cpia={runtime_args.use_cpia}, use_bagf={runtime_args.use_bagf}, mcrc={runtime_args.mcrc}, "
+        f"[{label}] use_cpia={runtime_args.use_cpia}, use_dgfm={runtime_args.use_dgfm}, mcrc={runtime_args.mcrc}, "
         f"missing={len(missing)}, unexpected={len(unexpected)}"
     )
     net.eval()
@@ -277,8 +277,8 @@ def main():
         f"Heatmap window size: {HEATMAP_WINDOW_SIZE}, stride: {HEATMAP_STRIDE}, "
         f"padded input: {get_padded_window_size(HEATMAP_WINDOW_SIZE)}"
     )
-    base_args = build_runtime_args(BASE_USE_CPIA, BASE_USE_BAGF, BASE_USE_MCRC, HEATMAP_WINDOW_SIZE)
-    full_args = build_runtime_args(FULL_USE_CPIA, FULL_USE_BAGF, FULL_USE_MCRC, HEATMAP_WINDOW_SIZE)
+    base_args = build_runtime_args(BASE_USE_CPIA, BASE_USE_dgfm, BASE_USE_MCRC, HEATMAP_WINDOW_SIZE)
+    full_args = build_runtime_args(FULL_USE_CPIA, FULL_USE_dgfm, FULL_USE_MCRC, HEATMAP_WINDOW_SIZE)
     base_net = load_model(BASE_WEIGHTS_PATH, "Base", base_args)
     full_net = load_model(FULL_WEIGHTS_PATH, "Full", full_args)
 

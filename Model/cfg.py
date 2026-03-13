@@ -69,7 +69,7 @@ def parse_args():
     parser.add_argument('-peft_ratio', type=float, default=0.25, help='peft prompt ratio')
     parser.add_argument('-peft_adapter_ratio', type=float, default=0.0625, help='peft adapter ratio')
     parser.add_argument('-use_cpia', type=str2bool, default=True, help='enable CPIA blocks in the DINOv2 encoder')
-    parser.add_argument('-use_bagf', type=str2bool, default=True, help='enable BAGF blocks in the DINOv2 encoder')
+    parser.add_argument('-use_dgfm', type=str2bool, default=True, help='enable dgfm blocks in the DINOv2 encoder')
     parser.add_argument('-mcrc', type=str2bool, default=True, help='enable MCRC local cross-modality region corruption')
     parser.add_argument('-mcrc_ratio', type=float, default=0.25, help='ratio of batch samples selected for MCRC')
     parser.add_argument('-mcrc_local_blocks', type=int, default=1, help='number of local masked blocks per selected sample')

@@ -201,10 +201,11 @@ class Net(nn.Module):
                  decode_channels=64,
                  dropout=0.1,
                  window_size=8,
-                 num_classes=6
+                 num_classes=6,
+                 runtime_args=None,
                  ):
         super().__init__()
-        args = cfg.parse_args()
+        args = runtime_args if runtime_args is not None else cfg.parse_args()
         encoder_name = getattr(args, "encoder", "dinov2_vitl14")
         if encoder_name in dinov2_model_registry or encoder_name.startswith("dinov2"):
             build_fn = dinov2_model_registry.get(encoder_name, dinov2_model_registry["dinov2_vitl14"])
@@ -233,7 +234,7 @@ class Net(nn.Module):
         self.is_dinov2 = is_dinov2
         encoder_channels = (256, 256, 256, 256)
         self.cpia_enabled = getattr(self.image_encoder, "cpia_enabled", True)
-        self.bagf_enabled = getattr(self.image_encoder, "bagf_enabled", True)
+        self.dgfm_enabled = getattr(self.image_encoder, "dgfm_enabled", True)
         if not self.is_dinov2:
             self.fpn1x = nn.Sequential(
                 nn.ConvTranspose2d(256, 256, kernel_size=2, stride=2),
@@ -270,8 +271,8 @@ class Net(nn.Module):
                     trainable = True
                 elif "peft_cpia_blocks" in n:
                     trainable = self.cpia_enabled
-                elif "peft_bagf_blocks" in n or "peft_fuse_norms" in n:
-                    trainable = self.bagf_enabled
+                elif "peft_dgfm_blocks" in n or "peft_fuse_norms" in n:
+                    trainable = self.dgfm_enabled
                 elif n.startswith("extra_patch_embed.") or ".extra_patch_embed." in n:
                     trainable = getattr(self.image_encoder, "use_extra_patch_embed", False)
                 value.requires_grad = trainable

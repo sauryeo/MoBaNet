@@ -85,7 +85,7 @@ class DinoV2DualEncoder(nn.Module):
         self.tap_indices = _resolve_tap_indices(args, model_name, len(self.backbone_blocks))
         self.use_extra_patch_embed = getattr(args, "dinov2_use_extra_patch_embed", True)
         self.cpia_enabled = getattr(args, "use_cpia", True)
-        self.bagf_enabled = getattr(args, "use_bagf", True)
+        self.dgfm_enabled = getattr(args, "use_dgfm", True)
 
         self.extra_patch_embed = None
         if self.use_extra_patch_embed:
@@ -98,7 +98,7 @@ class DinoV2DualEncoder(nn.Module):
         self.peft_cpia_blocks = nn.ModuleList(
             [CPIABlock(self.embed_dim, ratio=peft_ratio) for _ in self.tap_indices]
         )
-        self.peft_bagf_blocks = nn.ModuleList(
+        self.peft_dgfm_blocks = nn.ModuleList(
             [
                 BoundaryAwareGatedFusionBlock(
                     dims=self.embed_dim,
@@ -224,8 +224,8 @@ class DinoV2DualEncoder(nn.Module):
 
             x_stage = self.backbone.norm(x_seq)[:, -expected:, :]
             y_stage = self.backbone.norm(y_seq)[:, -expected:, :]
-            if self.bagf_enabled:
-                fused_stage = self.peft_bagf_blocks[stage_idx](x_stage, y_stage, h, w)
+            if self.dgfm_enabled:
+                fused_stage = self.peft_dgfm_blocks[stage_idx](x_stage, y_stage, h, w)
                 fused_stage = self.peft_fuse_norms[stage_idx](fused_stage)
             else:
                 fused_stage = 0.5 * (x_stage + y_stage)

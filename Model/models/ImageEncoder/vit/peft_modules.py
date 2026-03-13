@@ -3,7 +3,6 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class Adapter(nn.Module):
@@ -88,49 +87,16 @@ class BoundaryAwareGatedFusionBlock(nn.Module):
 
         self.rgb_reduce = nn.Conv2d(dims, hidden_dim, kernel_size=1, bias=False)
         self.dsm_reduce = nn.Conv2d(dims, hidden_dim, kernel_size=1, bias=False)
-
-        self.edge_encoder = nn.Sequential(
-            nn.Conv2d(3, hidden_dim, kernel_size=3, padding=1, bias=False),
-            nn.GroupNorm(1, hidden_dim),
-            nn.GELU(),
-        )
         self.gate_net = nn.Sequential(
-            nn.Conv2d(hidden_dim * 5, hidden_dim, kernel_size=1, bias=False),
+            nn.Conv2d(hidden_dim * 3, hidden_dim, kernel_size=1, bias=False),
             nn.GroupNorm(1, hidden_dim),
             nn.GELU(),
             nn.Conv2d(hidden_dim, dims, kernel_size=1, bias=True),
             nn.Sigmoid(),
         )
-        self.refine_net = nn.Sequential(
-            nn.Conv2d(hidden_dim * 3, hidden_dim, kernel_size=3, padding=1, bias=False),
-            nn.GroupNorm(1, hidden_dim),
-            nn.GELU(),
-            nn.Conv2d(hidden_dim, dims, kernel_size=1, bias=False),
-        )
-        self.refine_scale = nn.Parameter(torch.tensor(0.1))
-
-        sobel_x = torch.tensor(
-            [[[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]]],
-            dtype=torch.float32,
-        ).unsqueeze(0)
-        sobel_y = torch.tensor(
-            [[[-1.0, -2.0, -1.0], [0.0, 0.0, 0.0], [1.0, 2.0, 1.0]]],
-            dtype=torch.float32,
-        ).unsqueeze(0)
-        self.register_buffer("sobel_x", sobel_x)
-        self.register_buffer("sobel_y", sobel_y)
 
         nn.init.zeros_(self.gate_net[-2].weight)
         nn.init.zeros_(self.gate_net[-2].bias)
-        nn.init.zeros_(self.refine_net[-1].weight)
-
-    def _edge_response(self, feature_map):
-        base = feature_map.mean(dim=1, keepdim=True)
-        grad_x = F.conv2d(base, self.sobel_x, padding=1)
-        grad_y = F.conv2d(base, self.sobel_y, padding=1)
-        edge = torch.sqrt(grad_x.pow(2) + grad_y.pow(2) + 1e-6)
-        edge = edge / edge.amax(dim=(2, 3), keepdim=True).clamp_min(1e-6)
-        return edge
 
     def forward(self, x_rgb, x_dsm, H, W):
         B, N, C = x_rgb.shape
@@ -140,19 +106,11 @@ class BoundaryAwareGatedFusionBlock(nn.Module):
         rgb_reduce = self.rgb_reduce(x_rgb)
         dsm_reduce = self.dsm_reduce(x_dsm)
         diff_reduce = torch.abs(rgb_reduce - dsm_reduce)
-        prod_reduce = rgb_reduce * dsm_reduce
-
-        edge_rgb = self._edge_response(x_rgb)
-        edge_dsm = self._edge_response(x_dsm)
-        edge_feat = self.edge_encoder(torch.cat([edge_rgb, edge_dsm, torch.abs(edge_rgb - edge_dsm)], dim=1))
 
         gate = self.gate_net(
-            torch.cat([rgb_reduce, dsm_reduce, diff_reduce, prod_reduce, edge_feat], dim=1)
+            torch.cat([rgb_reduce, dsm_reduce, diff_reduce], dim=1)
         )
-        refine = self.refine_net(torch.cat([diff_reduce, prod_reduce, edge_feat], dim=1))
-        edge_weight = torch.sigmoid(edge_rgb + edge_dsm)
-
-        fused = gate * x_rgb + (1.0 - gate) * x_dsm + self.refine_scale * edge_weight * refine
+        fused = gate * x_rgb + (1.0 - gate) * x_dsm
         return fused.flatten(2).transpose(1, 2).contiguous()
 
 
