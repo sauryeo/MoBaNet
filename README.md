@@ -32,8 +32,6 @@ The main components are:
   <img src="figure/overall.png" alt="MoBaNet overall framework" width="92%">
 </p>
 
-The original PDF version is available at [figure/overall.pdf](figure/overall.pdf).
-
 ## Repository Structure
 
 ```text
@@ -48,11 +46,8 @@ MoBaNet/
 |  `- models/
 |- dinov2_hub/
 `- figure/
-   |- overall.pdf
    |- overall.png
-   |- potsdam_compare_patch512.pdf
    |- potsdam.png
-   |- vaihingen_compare_patch512.pdf
    `- vaihingen.png
 ```
 
