@@ -1,6 +1,6 @@
 # MoBaNet
 
-**MoBaNet**: Parameter-Efficient Modality-Balanced Symmetric Fusion for Multimodal Remote Sensing Semantic Segmentation  
+Parameter-Efficient Modality-Balanced Symmetric Fusion for Multimodal Remote Sensing Semantic Segmentation  
 [Paper on arXiv](https://arxiv.org/abs/2603.17705)
 
 MoBaNet is a multimodal remote sensing semantic segmentation framework for RGB and DSM data. This repository is designed for the ISPRS Vaihingen and Potsdam benchmarks, with a DINOv2- or SAM-based encoder and a lightweight multimodal fusion pipeline for better cross-modal interaction and boundary-aware prediction.
