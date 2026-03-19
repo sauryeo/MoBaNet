@@ -1,5 +1,8 @@
 # MoBaNet
 
+**MoBaNet**: Parameter-Efficient Modality-Balanced Symmetric Fusion for Multimodal Remote Sensing Semantic Segmentation  
+[Paper on arXiv](https://arxiv.org/abs/2603.17705)
+
 MoBaNet is a multimodal remote sensing semantic segmentation framework for RGB and DSM data. This repository is designed for the ISPRS Vaihingen and Potsdam benchmarks, with a DINOv2- or SAM-based encoder and a lightweight multimodal fusion pipeline for better cross-modal interaction and boundary-aware prediction.
 
 ## Overview
@@ -156,15 +159,11 @@ The script reports `mIoU` and saves colorized prediction maps to the correspondi
   <img src="figure/potsdam.png" alt="Qualitative comparison on Potsdam" width="92%">
 </p>
 
-The original PDF version is available at [figure/potsdam_compare_patch512.pdf](figure/potsdam_compare_patch512.pdf).
-
 ### Vaihingen
 
 <p align="center">
   <img src="figure/vaihingen.png" alt="Qualitative comparison on Vaihingen" width="92%">
 </p>
-
-The original PDF version is available at [figure/vaihingen_compare_patch512.pdf](figure/vaihingen_compare_patch512.pdf).
 
 ## Citation
 
@@ -172,9 +171,10 @@ If you use this repository in your research, please cite the associated paper on
 
 ```bibtex
 @article{mobanet,
-  title={MoBaNet},
-  author={Your Name et al.},
-  journal={To be added},
-  year={2026}
+  title={Parameter-Efficient Modality-Balanced Symmetric Fusion for Multimodal Remote Sensing Semantic Segmentation},
+  author={Li, Haocheng and Zheng, Juepeng and Miao, Shuangxi and Lu, Ruibo and Cai, Guosheng and Fu, Haohuan and Huang, Jianxi},
+  journal={arXiv preprint arXiv:2603.17705},
+  year={2026},
+  doi={10.48550/arXiv.2603.17705}
 }
 ```
